@@ -8,6 +8,11 @@ namespace SEBReadinessTool
 {
     public static class Constants
     {
+        public static class Log
+        {
+            public static readonly string Folder = @"%localappdata%\SafeExamBrowser\Logs";
+        }
+
         public static class Services
         { 
             public static readonly string SafeExamBrowser = nameof(SafeExamBrowser);

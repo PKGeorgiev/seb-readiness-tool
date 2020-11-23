@@ -1,6 +1,9 @@
-﻿using System;
+﻿using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Management;
 using System.Security.Permissions;
@@ -22,6 +25,7 @@ namespace SEBReadinessTool
         {
             ServiceStatus ss = new ServiceStatus();
 
+            // Checking service's status with WMI does not require admin priviledges
             try
             {
                 var query = String.Format(
@@ -37,13 +41,29 @@ namespace SEBReadinessTool
                     ss.State = Convert.ToString(service.GetPropertyValue("State"));
                     ss.StartMode = Convert.ToString(service.GetPropertyValue("StartMode"));
                     ss.Success = true;
-                    
+
                     break;
                 };
             }
             catch { }
 
             return ss;
+        }
+
+        private string GetUsername()
+        {
+            WindowsIdentity identity = WindowsIdentity.GetCurrent();
+
+            if (identity.Name.IndexOf("\\") > 0)
+            {
+                return identity.Name.Split('\\')[1];
+            }
+            else if (identity.Name.IndexOf("@") > 0)
+            {
+                return identity.Name.Split('@')[0];
+            }
+
+            return identity.Name;
         }
 
         public static bool IsAdministrator()
@@ -89,6 +109,77 @@ namespace SEBReadinessTool
                 StartService(name);
             }
 
+        }
+
+        private List<FileInfo> GetFiles(string path, string pattern = "*.*")
+        {
+            if (Directory.Exists(path))
+            {
+                DirectoryInfo dir = new DirectoryInfo(path);
+
+                return dir.GetFiles(pattern).ToList();
+            }
+
+            return new List<FileInfo>();
+        }
+
+        public string ArchiveLogs()
+        {
+            var path = Environment.ExpandEnvironmentVariables(Constants.Log.Folder);
+            var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var computerName = Environment.GetEnvironmentVariable("computername");
+            var zipName = string.Format("SEB Logs_{0}_{1}_{2}.zip", computerName, GetUsername(), DateTime.Now.ToString("yyyy-MM-dd HH.mm.ss"));
+            var zipPath = Path.Combine(documentsPath, zipName);
+
+            if (File.Exists(zipPath))
+            {
+                File.Delete(zipPath);
+            }
+
+            var files = GetFiles(path, "*.log")
+                .OrderByDescending(ob => ob.CreationTime)
+                .Take(9);
+
+            using (ZipArchive archive = ZipFile.Open(zipPath, ZipArchiveMode.Update))
+            {
+                foreach (var file in files)
+                {
+
+                    archive.CreateEntryFromFile(file.FullName, file.Name);
+                }
+            }
+
+            return zipPath;
+        }
+
+        // https://stackoverflow.com/a/58017167
+        public static bool IsSoftwareInstalled(string softwareName)
+        {
+            var registryUninstallPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+            var registryUninstallPathFor32BitOn64Bit = @"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
+
+            if (Is32BitWindows())
+                return IsSoftwareInstalled(softwareName, RegistryView.Registry32, registryUninstallPath);
+
+            var is64BitSoftwareInstalled = IsSoftwareInstalled(softwareName, RegistryView.Registry64, registryUninstallPath);
+            var is32BitSoftwareInstalled = IsSoftwareInstalled(softwareName, RegistryView.Registry64, registryUninstallPathFor32BitOn64Bit);
+            return is64BitSoftwareInstalled || is32BitSoftwareInstalled;
+        }
+
+        private static bool Is32BitWindows() => Environment.Is64BitOperatingSystem == false;
+
+        private static bool IsSoftwareInstalled(string softwareName, RegistryView registryView, string installedProgrammsPath)
+        {
+            var uninstallKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, registryView)
+                                                  .OpenSubKey(installedProgrammsPath);
+
+            if (uninstallKey == null)
+                return false;
+
+            return uninstallKey.GetSubKeyNames()
+                               .Select(installedSoftwareString => uninstallKey.OpenSubKey(installedSoftwareString))
+                               .Select(installedSoftwareKey => installedSoftwareKey.GetValue("DisplayName") as string)
+                               .Any(installedSoftwareName => installedSoftwareName != null && installedSoftwareName.Contains(softwareName));
         }
     }
 }
