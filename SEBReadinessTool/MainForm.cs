@@ -22,8 +22,9 @@ namespace SEBReadinessTool
 
         private void button1_Click(object sender, EventArgs e)
         {
-            SEBUtils.IsAdministrator();
-            _utils.ArchiveLogs();
+            var res = SEBUtils.GetSoftwareEntry("Safe Exam Browser");
+            //SEBUtils.IsAdministrator();
+            //_utils.ArchiveLogs();
         }
     }
 }

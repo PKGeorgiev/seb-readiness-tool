@@ -159,27 +159,58 @@ namespace SEBReadinessTool
             var registryUninstallPathFor32BitOn64Bit = @"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
 
             if (Is32BitWindows())
-                return IsSoftwareInstalled(softwareName, RegistryView.Registry32, registryUninstallPath);
+                return GetSoftwareEntryInternal(softwareName, RegistryView.Registry32, registryUninstallPath) != null;
 
-            var is64BitSoftwareInstalled = IsSoftwareInstalled(softwareName, RegistryView.Registry64, registryUninstallPath);
-            var is32BitSoftwareInstalled = IsSoftwareInstalled(softwareName, RegistryView.Registry64, registryUninstallPathFor32BitOn64Bit);
+            var is64BitSoftwareInstalled = GetSoftwareEntryInternal(softwareName, RegistryView.Registry64, registryUninstallPath) != null;
+            var is32BitSoftwareInstalled = GetSoftwareEntryInternal(softwareName, RegistryView.Registry64, registryUninstallPathFor32BitOn64Bit) != null;
             return is64BitSoftwareInstalled || is32BitSoftwareInstalled;
+        }
+
+        public static SoftwareEntry GetSoftwareEntry(string softwareName)
+        {
+            var registryUninstallPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
+            var registryUninstallPathFor32BitOn64Bit = @"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall";
+
+            if (Is32BitWindows())
+                return GetSoftwareEntryInternal(softwareName, RegistryView.Registry32, registryUninstallPath);
+
+            var is64BitSoftwareInstalled = GetSoftwareEntryInternal(softwareName, RegistryView.Registry64, registryUninstallPath);
+            var is32BitSoftwareInstalled = GetSoftwareEntryInternal(softwareName, RegistryView.Registry64, registryUninstallPathFor32BitOn64Bit);
+
+            if (is64BitSoftwareInstalled != null)
+                return is64BitSoftwareInstalled;
+            else
+                return is32BitSoftwareInstalled;
         }
 
         private static bool Is32BitWindows() => Environment.Is64BitOperatingSystem == false;
 
-        private static bool IsSoftwareInstalled(string softwareName, RegistryView registryView, string installedProgrammsPath)
+        private static SoftwareEntry GetSoftwareEntryInternal(string softwareName, RegistryView registryView, string installedProgrammsPath)
         {
             var uninstallKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, registryView)
                                                   .OpenSubKey(installedProgrammsPath);
 
             if (uninstallKey == null)
-                return false;
+                return null;
 
-            return uninstallKey.GetSubKeyNames()
+            var uk = uninstallKey.GetSubKeyNames()
                                .Select(installedSoftwareString => uninstallKey.OpenSubKey(installedSoftwareString))
-                               .Select(installedSoftwareKey => installedSoftwareKey.GetValue("DisplayName") as string)
-                               .Any(installedSoftwareName => installedSoftwareName != null && installedSoftwareName.Contains(softwareName));
+                               .Select(installedSoftwareKey => new SoftwareEntry()
+                               {
+                                   DisplayName = installedSoftwareKey.GetValue("DisplayName") as string,
+                                   DisplayVersion = installedSoftwareKey.GetValue("DisplayVersion") as string,
+                                   UninstallString = installedSoftwareKey.GetValue("UninstallString") as string
+                               })
+                               .Where(installedSoftwareName => installedSoftwareName.DisplayName != null && installedSoftwareName.DisplayName.Contains(softwareName))
+                               .FirstOrDefault();
+
+            Version version;
+            if (uk != null && Version.TryParse(uk.DisplayVersion, out version))
+            {
+                uk.Version = version;
+            }
+
+            return uk;
         }
     }
 }
