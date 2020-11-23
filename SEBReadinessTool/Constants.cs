@@ -8,6 +8,12 @@ namespace SEBReadinessTool
 {
     public static class Constants
     {
+        public static readonly string SEBRTRepoOwner = "PKGeorgiev";        
+        public static readonly string SEBRTRepoName = "seb-readiness-tool";        
+
+        public static readonly string SEBRepoOwner = "SafeExamBrowser";
+        public static readonly string SEBRepoName = "seb-win-refactoring";
+
         public static class Log
         {
             public static readonly string Folder = @"%localappdata%\SafeExamBrowser\Logs";

@@ -13,16 +13,21 @@ namespace SEBReadinessTool
     public partial class MainForm : Form
     {
         private SEBUtils _utils;
+        private SelfUpdate _update;
 
         public MainForm()
         {
             InitializeComponent();
             _utils = new SEBUtils();
+            _update = new SelfUpdate();
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
-            var res = SEBUtils.GetSoftwareEntry("Safe Exam Browser");
+            _= _update.CheckForUpdate(Constants.SEBRepoOwner, Constants.SEBRepoName);
+
+            //_ = _update.GetLatestTagAsync(Constants.SEBRepoOwner, Constants.SEBRepoName);
+            //var res = SEBUtils.GetSoftwareEntry("Safe Exam Browser");
             //SEBUtils.IsAdministrator();
             //_utils.ArchiveLogs();
         }
